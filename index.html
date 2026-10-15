@@ -65,7 +65,7 @@
       document.getElementById('explicacao').style.display = 'none';
     }
 
-    // Busca dinamicamente os modelos ativos na Groq para nunca usar um descontinuado
+    // Busca dinamicamente e filtra apenas modelos de texto (Chat) ativos
     async function obterModeloAtivoGroq() {
       const res = await fetch('https://api.groq.com/openai/v1/models', {
         headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` }
@@ -76,14 +76,34 @@
       }
       
       const data = await res.json();
-      const modelos = data.data.map(m => m.id);
+      const modelosDisponiveis = data.data.map(m => m.id);
 
-      // Prioriza modelos potentes (Llama 3.3, 3.1 ou Mixtral) que estejam ativos na lista
-      const modeloEscolhido = modelos.find(m => m.includes('llama-3.3')) ||
-                              modelos.find(m => m.includes('llama-3.1')) ||
-                              modelos.find(m => m.includes('llama3')) ||
-                              modelos.find(m => m.includes('mixtral')) ||
-                              modelos[0];
+      // Modelos de texto ativos conhecidos da Groq
+      const listaPrioritaria = [
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant',
+        'llama-3.2-11b-vision-instruct',
+        'llama-3.2-3b-preview',
+        'mixtral-8x7b-32768',
+        'gemma2-9b-it'
+      ];
+
+      // Tenta encontrar um modelo prioritário exato que esteja disponível na conta
+      let modeloEscolhido = listaPrioritaria.find(p => modelosDisponiveis.includes(p));
+
+      // Se não achar um exato, pega qualquer modelo seguro descartando áudio e restritos
+      if (!modeloEscolhido) {
+        modeloEscolhido = modelosDisponiveis.find(m => 
+          !m.includes('canopylabs') && 
+          !m.includes('whisper') && 
+          !m.includes('guard') && 
+          !m.includes('audio')
+        );
+      }
+
+      if (!modeloEscolhido) {
+        throw new Error('Nenhum modelo de texto compatível encontrado na Groq.');
+      }
 
       return modeloEscolhido;
     }
