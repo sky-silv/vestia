@@ -65,6 +65,33 @@
       document.getElementById('explicacao').style.display = 'none';
     }
 
+    async function chamarGroq(modelo, prompt) {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: modelo,
+          messages: [
+            {
+              role: 'system',
+              content: 'Você é um professor especialista em vestibulares. Responda de forma didática, clara e direta ao ponto.'
+            },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.5
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Erro no modelo ${modelo}`);
+      }
+      return data.choices[0].message.content;
+    }
+
     async function verificarEExplicar() {
       const selecionada = document.querySelector('input[name="alt"]:checked');
       if (!selecionada) {
@@ -79,36 +106,18 @@
       divExp.style.display = 'block';
       divExp.innerHTML = `<b>Gerando explicação didática com a IA...</b>`;
 
-      const prompt = `Questão de ${questaoAtual.materia}:\n${questaoAtual.enunciado}\n\nAlternativas:\nA) ${questaoAtual.alternativa_a}\nB) ${questaoAtual.alternativa_b}\nC) ${questaoAtual.alternativa_c}\nD) ${questaoAtual.alternativa_d}\n\nGabarito Correto: Alternativa ${gabaritoOficial}.\n\nPor favor, forneça uma resolução explicativa bem didática e objetiva mostrando por que a alternativa ${gabaritoOficial} é a correta.`;
+      const prompt = `Questão de ${questaoAtual.materia}:\n${questaoAtual.enunciado}\n\nAlternativas:\nA) ${questaoAtual.alternativa_a}\nB) ${questaoAtual.alternativa_b}\nC) ${questaoAtual.alternativa_c}\nD) ${questaoAtual.alternativa_d}\n\nGabarito Correto: Alternativa ${gabaritoOficial}.\n\nExplique de forma bem didática por que a alternativa ${gabaritoOficial} é a correta.`;
 
       try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            // Modelo de ponta mais potente da Meta na Groq
-            model: 'llama-3.3-70b-versatile',
-            messages: [
-              {
-                role: 'system',
-                content: 'Você é um professor especialista em preparação para vestibulares (ENEM, Fuvest, etc.). Suas explicações são didáticas, claras, encorajadoras e diretas ao ponto.'
-              },
-              { role: 'user', content: prompt }
-            ],
-            temperature: 0.5
-          })
-        });
-
-        const resData = await response.json();
-
-        if (!response.ok) {
-          throw new Error(resData.error?.message || 'Erro de resposta da Groq');
+        let textoIA;
+        try {
+          // Tenta primeiro o modelo principal de alta capacidade
+          textoIA = await chamarGroq('llama3-70b-8192', prompt);
+        } catch (errPrimario) {
+          console.warn('Tentando modelo secundário devido a erro:', errPrimario);
+          // Fallback para o modelo secundário super estável
+          textoIA = await chamarGroq('llama3-8b-8192', prompt);
         }
-
-        const textoIA = resData.choices[0].message.content;
 
         divExp.innerHTML = `
           <h3>${acertou ? '✅ Você acertou!' : '❌ Você errou!'} (Gabarito: ${gabaritoOficial})</h3>
