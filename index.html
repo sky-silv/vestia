@@ -31,12 +31,12 @@
   </div>
 
   <script>
-    // 1. DADOS DO SUPABASE (Com as aspas corrigidas)
+    // 1. DADOS DO SUPABASE
     const SUPABASE_URL = 'https://xcpvhqwotqxlkupeyznm.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_WeSJwV3otX-tt8AlklD0oQ_KvD58mym';
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // 2. CHAVE GRATUITA DA GROQ (Com as aspas corrigidas)
+    // 2. CHAVE GRATUITA DA GROQ
     const GROQ_API_KEY = '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';
 
     let questaoAtual = null;
@@ -44,7 +44,7 @@
     async function carregarQuestao() {
       const { data, error } = await supabaseClient.from('questoes').select('*');
       if (error || !data || data.length === 0) {
-        alert('Erro ao carregar questões do Supabase. Verifique se há questões cadastradas!');
+        alert('Erro ao carregar questões do Supabase.');
         return;
       }
       
@@ -72,12 +72,14 @@
         return;
       }
 
-      const acertou = selecionada.value === questaoAtual.resposta_correta;
+      const gabaritoOficial = String(questaoAtual.resposta_correta).toUpperCase().trim();
+      const acertou = selecionada.value === gabaritoOficial;
+
       const divExp = document.getElementById('explicacao');
       divExp.style.display = 'block';
       divExp.innerHTML = `<b>Gerando explicação didática com a IA...</b>`;
 
-      const prompt = `Explique de forma bem didática para um estudante de vestibular por que a resposta correta da questão a seguir é a alternativa ${questaoAtual.resposta_correta}.\n\nQuestão: ${questaoAtual.enunciado}\nA) ${questaoAtual.alternativa_a}\nB) ${questaoAtual.alternativa_b}\nC) ${questaoAtual.alternativa_c}\nD) ${questaoAtual.alternativa_d}`;
+      const prompt = `Questão de ${questaoAtual.materia}:\n${questaoAtual.enunciado}\n\nAlternativas:\nA) ${questaoAtual.alternativa_a}\nB) ${questaoAtual.alternativa_b}\nC) ${questaoAtual.alternativa_c}\nD) ${questaoAtual.alternativa_d}\n\nGabarito Correto: Alternativa ${gabaritoOficial}.\n\nPor favor, forneça uma resolução explicativa bem didática e objetiva mostrando por que a alternativa ${gabaritoOficial} é a correta.`;
 
       try {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -87,22 +89,38 @@
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
+            // Modelo de ponta mais potente da Meta na Groq
             model: 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }]
+            messages: [
+              {
+                role: 'system',
+                content: 'Você é um professor especialista em preparação para vestibulares (ENEM, Fuvest, etc.). Suas explicações são didáticas, claras, encorajadoras e diretas ao ponto.'
+              },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.5
           })
         });
 
         const resData = await response.json();
+
+        if (!response.ok) {
+          throw new Error(resData.error?.message || 'Erro de resposta da Groq');
+        }
+
         const textoIA = resData.choices[0].message.content;
 
         divExp.innerHTML = `
-          <h3>${acertou ? '✅ Você acertou!' : '❌ Você errou!'} (Gabarito: ${questaoAtual.resposta_correta})</h3>
+          <h3>${acertou ? '✅ Você acertou!' : '❌ Você errou!'} (Gabarito: ${gabaritoOficial})</h3>
           <p><b>Explicação da IA:</b></p>
           <p>${textoIA.replace(/\n/g, '<br>')}</p>
         `;
       } catch (e) {
         console.error(e);
-        divExp.innerHTML = `<b>Gabarito: ${questaoAtual.resposta_correta}</b><br>Erro ao carregar a explicação da IA.`;
+        divExp.innerHTML = `
+          <h3>${acertou ? '✅ Você acertou!' : '❌ Você errou!'} (Gabarito: ${gabaritoOficial})</h3>
+          <p style="color: red;"><b>Erro ao carregar IA:</b> ${e.message}</p>
+        `;
       }
     }
   </script>
